@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>OW mask warp simulator - moon/hgt orbit parameters are still missing!</title>
+<meta charset=utf-8>
+<style>
+	.slidecontainer {
+	  width: 100%;
+	}
+
+	.slider {
+	  appearance: none;
+	  width: 100%;
+	  height: 25px;
+	  background: none;
+	  border: 1px solid #ddd;
+	  opacity: 0.7;
+	  -webkit-transition: .2s;
+	  transition: opacity .2s;
+	  margin-bottom: 10px;
+	  outline: none;
+	}
+
+	.slider:hover {
+	  opacity: 1;
+	}
+
+	.slider::-webkit-slider-thumb {
+	  -webkit-appearance: none;
+	  appearance: none;
+	  width: 30px;
+	  height: 30px;
+	  background: transparent;
+	  cursor: pointer;
+	  border-radius: 20px;
+	  border: 5px solid #f72;
+	  background: #f72;
+	  box-shadow: -5px 5px 0px 2px #000 inset;
+	  box-sizing: content-box;
+	}
+
+	.slider::-moz-range-thumb {
+	  width: 30px;
+	  height: 30px;
+	  background: transparent;
+	  cursor: pointer;
+	  border-radius: 20px;
+	  border: 5px solid #f72;
+	  background: #f72;
+	  box-shadow: -5px 5px 0px 2px #000 inset;
+	}
+	body {
+	  margin: 8px;
+	  overflow: hidden;
+	  background: #444;
+	}
+	canvas {
+		position: fixed;
+		left: 8px;
+		top: 80px;
+	}
+</style>
+<script>
+	let drawTowerTwin = function(ctx, time, color) {
+		let oldStrokeStyle = ctx.strokeStyle;
+		let oldLineWidth = ctx.lineWidth;
+		ctx.strokeStyle = "rgb(" + color + ")";
+		ctx.lineWidth = this.radius*1/2;
+
+		ctx.beginPath();
+		ctx.arc(this.x, this.z, this.radius*3/4, 0, 2 * Math.PI, false);
+		ctx.stroke();
+
+		ctx.strokeStyle = oldStrokeStyle;
+		ctx.lineWidth = oldLineWidth;
+	};
+
+	// "period:1" without a radius ensures that orbits are drawn of objects that we don't have orbital parameters of yet
+	let objects = [
+		{name: "sun",					x:0, z:0,							radius:2000							},
+		{name: "ss",	parent:"sun",	distance:2300,						period:34.5							},
+		{name: "hgt",	parent:"sun",	x:-2867.882, z:4095.762,												},
+		{name: "ct",	parent:"hgt",	x:0,z:250,	initialspeed:-28.28427,	radius:150,		angularspeed: 0.05	},
+		{name: "tt",	parent:"hgt",	x:0,z:-250,	initialspeed:-28.28427,	radius:150,		angularspeed: 0.07, render: drawTowerTwin},
+		{name: "th",	parent:"sun",	x:1492.172, z:-8462.538,			radius:250,		angularspeed: -0.01	},
+		{name: "ar",	parent:"th",	distance:900,   period:1			/*radius:75*/						},
+		//{name: "sat",	parent:"th",	distance:340															},
+		{name: "bh",	parent:"sun",	x:11513.28, z:-2030.102,			radius:300,		angularspeed: 0.02	},
+		{name: "hl",	parent:"bh",	distance:1000,	period:1			/*radius:100*/						},
+		{name: "gd",	parent:"sun",	x:3421.723, z:-16097.95,			radius:950,		angularspeed: 0		},
+		{name: "opc",	parent:"gd",	distance:1200,	period:1												},
+		{name: "db",	parent:"sun",	x:-3472.959, z:19696.16,			radius:600,		angularspeed: 0		},
+		//{name: "whs",	parent:"sun",	distance:23540															},
+		{name: "wh",	parent:"sun",	x:-23000,z:0, initialspeed: 0, 		radius:40							},
+		{name: "il",	parent:"sun",	x:-24100,z:0, initialspeed:-0.425,	radius:125,	lifetime: 60*20			}
+	];
+
+	let objectIndexByName = new Map(objects.map((obj, idx) => [obj.name, idx]));
+
+	if (objectIndexByName.size != objects.length) {
+		throw new Error("Duplicate object name(s) " + objects.filter((obj,idx) => objectIndexByName.get(obj.name) != idx).map(obj => obj.name).join(", "));
+	}
+
+	function simulate(time) {
+		let result = objects.map(obj => Object.assign({}, obj));
+		let sun_G = 4e8;
+		for (let object of result) {
+			if (!object.parent) continue;
+			
+			let parent = result[objectIndexByName.get(object.parent)];
+			if (!parent) {
+				throw new Error(object.parent + " not found");
+			}
+		
+			if (object.x || object.z) {
+				object.distance = Math.sqrt((object.x || 0)**2 + (object.z || 0)**2);
+				object.angle = Math.atan2(object.z, object.x);
+				if (parent.angle) object.angle += parent.angle;
+				if (object.initialspeed == null) {
+					// circular orbit
+					object.period = 2*Math.PI*Math.sqrt(object.distance**3/sun_G);
+				} else if (!object.initialspeed) {
+					// does not move
+				} else if (object.parent === "sun") {
+					// elliptical kepler orbit
+					let actualspeed = Math.sqrt(sun_G / object.distance)*object.initialspeed;
+					// initial distance
+					let distance1 = object.distance;
+					// assuming a simple kepler orbit where the object starts at either minimum or maximum distance -> compute the other extreme
+					let distance2 = distance1 / (2*sun_G / (actualspeed**2 * object.distance) - 1);
+					// and from that we can compute the entire orbit
+					object.distance = (distance1 + distance2)/2;
+					object.eccentricity = (distance1 - distance2)/(distance1 + distance2);
+					object.period = 2*Math.PI*Math.sqrt(object.distance**3/sun_G) * Math.sign(actualspeed);
+					console.log(actualspeed, object.distance, object.eccentricity, object.period);
+				} else {
+					// just circular with the given velocity instead of whatever would be physically correct
+					object.period = 2*Math.PI*object.distance/object.initialspeed;
+				}
+			}
+		
+			
+			object.rotangle = -(object.angularspeed || 0) * time;
+
+			let angle = - (object.angle + (object.period ? time / object.period : 0) * 2 * Math.PI);
+			if (!object.eccentricity) {
+				object.x = parent.x + Math.cos(angle) * object.distance;
+				object.z = parent.z + Math.sin(angle) * object.distance;
+				continue;
+			}
+			
+			// Elliptical Kepler orbit - unfortunately there's no direct formula for deriving the orbital position at any given moment
+			// Instead solving (E - e*sin(E) = angle) by using binary steps
+			
+			let E = angle, step = Math.PI/2;
+			for (let i = 0; i < 50; i++) {
+				E -= step * Math.sign(E - object.eccentricity*Math.sin(E) - angle);
+				step *= 0.5;
+			}
+			
+			object.x = parent.x + (Math.cos(E) - object.eccentricity) * object.distance;
+			object.z = parent.z + Math.sin(E) * object.distance * Math.sqrt(1 - object.eccentricity ** 2);
+		}
+		return result;
+	}
+
+	// We simulate and render the solar system twice wrt TH's current angle.
+	// But which point to fix?
+	// Method 1: fix pre-warp sun
+	// Method 2: fix pre-warp TH
+	// Method 3: fix post-warp TH
+	// Method 4: fix post-warp sun
+
+	function render() {
+		let time = +document.getElementById("slider").value;
+		document.getElementById("time").value = [(time-time%600)/600,(time-time%60)/60%10,":",(time-time%10)/10%6,time%10].join("");
+		
+		let canvas = document.getElementById("canvas");
+		let width = Math.floor(window.innerWidth - 16);
+		let height = Math.floor(window.innerHeight - 88);
+		canvas.width = width;
+		canvas.height = height;
+		let ctx = canvas.getContext("2d");
+		
+		ctx.fillStyle = "black";
+		ctx.fillRect(0,0,width,height);
+		
+		let scale = Math.min(width, height)/44000;
+
+		ctx.setTransform(1,0,0,1,0,0);
+		ctx.translate(width/2, height/2);
+		ctx.scale(scale, scale);
+		ctx.lineWidth = 1/scale;
+
+		let objects = simulate(time);
+		let objects0 = simulate(0);
+
+		let th = objects[objectIndexByName.get("th")];
+		let th0 = objects0[objectIndexByName.get("th")];
+
+
+		let white = "255,255,255";
+		let red = "255,0,0";
+
+
+		
+		switch (+document.getElementById("mode").value) {
+		case 0:
+			uncenter(ctx, th);
+			renderSystem(ctx, objects, time, white);
+			break;
+		case 1:
+			uncenter(ctx, th);
+			renderSystem(ctx, objects0, 0, red);
+			renderSystem(ctx, objects, time, white);
+			break;
+		case 2:
+			renderSystem(ctx, objects0, 0, red);
+			renderSystem(ctx, objects, time, white);
+			break;
+		case 3:
+			uncenter(ctx, th0);
+			renderSystem(ctx, objects0, 0, red);
+			renderSystem(ctx, objects, time, white);
+			break;
+		}
+		
+	}
+	
+	function center(ctx, baseObj) {
+		ctx.rotate(baseObj.rotangle);
+		ctx.translate(-baseObj.x, -baseObj.z);
+	}
+
+	function uncenter(ctx, baseObj) {
+		ctx.translate(baseObj.x, baseObj.z);
+		ctx.rotate(-baseObj.rotangle);
+	}
+	
+	function renderSystem(ctx, objects, time, color) {
+		ctx.fillStyle = "rgb(" + color + ")";
+		ctx.strokeStyle = "rgba(" + color + ",0.3)";
+
+		let baseObj = objects[objectIndexByName.get("th")];
+		center(ctx, baseObj);
+	
+		for (let obj of objects) {
+			if (obj.radius) {
+				if (!obj.lifetime || time < obj.lifetime) {
+					if (obj.render) {
+						obj.render(ctx, time, color);
+					} else {
+						ctx.beginPath();
+						ctx.arc(obj.x, obj.z, obj.radius, 0, 2 * Math.PI, false);
+						ctx.fill();
+					}
+				}
+			}
+			if (obj.distance && obj.period) {
+				let parent = objects[objectIndexByName.get(obj.parent)];
+				ctx.beginPath();
+				let e = obj.eccentricity || 0;
+				ctx.ellipse((parent.x - obj.distance*e), parent.z, obj.distance, obj.distance*Math.sqrt(1 - e**2), 0, 0, 2 * Math.PI, false);
+				ctx.stroke();
+			}
+		}
+
+		uncenter(ctx, baseObj);
+	}
+	
+	function showInfo() {
+		alert("Outer Wilds orbit simulator version 2 by Kabuto\n\nControls: drag the slider at the top, then use cursor keys for finetuning.\n\nThe hollow planet is Ash Twin.");
+	}
+	
+	
+	window.addEventListener("resize", render);
+</script>
+</head>
+<body onload="render()">
+	<div class="slidecontainer">
+		<input type="range" min="0" max="1320" value="0" class="slider" id="slider" onchange="render()" oninput="render()">
+	</div>
+	<div class="controls">
+		<select id="mode" onchange="render()">
+			<option value=0>orbits only</option>
+			<option value=1>warp, fix pre-warp sun</option>
+			<option value=2>warp, fix TH</option>
+			<option value=3>warp, fix post-warp sun</option>
+		</select>
+		<input id="time" disabled="disabled" value="0:00"/>
+		<input onclick="showInfo()" type="button" value="about / info">
+	</div>
+	<canvas id="canvas"></canvas>
+</body>
+</html>

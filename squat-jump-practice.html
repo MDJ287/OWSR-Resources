@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Squat Jump Practice</title>
+        <script>
+            let firstCode = 71;
+            let secondCode = 32;
+            let isSettingKey = -1;
+            let hasReleased = false;
+
+            let pressTime = -1;
+            let releaseTime = -1;
+            let rePressTime = -1;
+            let reReleaseTime = -1;
+
+            onload = () => {
+                document.body.onkeydown = keyDown;
+                document.body.onkeyup = keyUp;
+
+                document.body.onmousedown = mouseDown;
+                document.body.onmouseup = mouseUp;
+
+                document.getElementById('button1').onclick = clickbutton0;
+                document.getElementById('button2').onclick = clickbutton1;
+
+                addMessage('Info will be displayed here!', 'info');
+            };
+            function clickbutton0() {
+                isSettingKey = 0;
+                addMessage(`Press a keyboard key or click to set first jump key!`, 'info');
+                this.blur();
+            }
+            function clickbutton1() {
+                isSettingKey = 1;
+                addMessage(`Press a keyboard key or click to set second jump key!`, 'info');
+                this.blur();
+            }
+            function keyDown(event) {
+                if (isSettingKey !== -1) {
+                    if (isSettingKey === 0) {
+                        firstCode = event.keyCode;
+                        document.getElementById('text1').innerText = event.code;
+                    }
+                    else {
+                        secondCode = event.keyCode;
+                        document.getElementById('text2').innerText = event.code;
+                    }
+                    addMessage(`Set ${isSettingKey === 0 ? 'first' : 'second'} key to [${event.code}]`, 'success');
+                    isSettingKey = -1;
+                    return;
+                }
+                if (event.keyCode === firstCode) {
+                    if (firstCode !== secondCode || pressTime === -1) {
+                        pressTime = Date.now();
+                        hasReleased = false;
+                    }
+                    else rePressTime = Date.now();
+                }
+                else if (event.keyCode === secondCode) {
+                    rePressTime = Date.now();
+                }
+            }
+            function mouseDown(event) {
+                if (isSettingKey !== -1) {
+                    if (isSettingKey === 0) {
+                        firstCode = -8+event.button;
+                        document.getElementById('text1').innerText = `Mouse${event.button}`;
+                    }
+                    else {
+                        secondCode = -8+event.button;
+                        document.getElementById('text2').innerText = `Mouse${event.button}`;
+                    }
+                    addMessage(`Set ${isSettingKey === 0 ? 'first' : 'second'} key to [Mouse${event.button}]`, 'success');
+                    isSettingKey = -1;
+                    return;
+                }
+                if (-8+event.button === firstCode) {
+                    if (firstCode !== secondCode || pressTime === -1) {
+                        pressTime = Date.now();
+                        hasReleased = false;
+                    }
+                    else rePressTime = Date.now();
+                }
+                else if (-8+event.button === secondCode) {
+                    rePressTime = Date.now();
+                }
+            }
+            function keyUp(event) {
+                if (pressTime === -1) return;
+                if (event.keyCode === firstCode) {
+                    if (firstCode !== secondCode || !hasReleased) {
+                        releaseTime = Date.now();
+                        hasReleased = true;
+                    }
+                    else {
+                        reReleaseTime = Date.now();
+                        displayResults();
+                    }
+                }
+                else if (event.keyCode === secondCode) {
+                    reReleaseTime = Date.now();
+                    displayResults();
+                }
+            }
+            function mouseUp(event) {
+                console.log(event);
+                if (pressTime === -1) return;
+                if (-8+event.button === firstCode) {
+                    if (firstCode !== secondCode || !hasReleased) {
+                        releaseTime = Date.now();
+                        hasReleased = true;
+                    }
+                    else {
+                        reReleaseTime = Date.now();
+                        displayResults();
+                    }
+                }
+                else if (-8+event.button === secondCode) {
+                    reReleaseTime = Date.now();
+                    displayResults();
+                }
+            }
+            function displayResults() {
+                const firstSquatDuration = releaseTime - pressTime;
+                const betweenJumpsDuration = rePressTime - releaseTime;
+                const secondSquatDuration = reReleaseTime - rePressTime;
+                pressTime = -1;
+                const probability = 1-Math.abs(1-betweenJumpsDuration*60/1000);
+                const chance = `${Math.round(probability*100)}%`
+                const info = `${firstSquatDuration}, ${betweenJumpsDuration}, ${secondSquatDuration}`;
+                if (probability <= 0) {
+                    addMessage(`(${info}) FAIL: time between jumps too far from 1 frame`, 'fail');
+                }
+                else if (secondSquatDuration >= 250) {
+                    addMessage(`(${info}) FAIL: second jump was held for too long (otherwise chance would be ${chance}).`, 'fail');
+                }
+                else {
+                    addMessage(`(${info}) SUCCESS: approximate chance is ${chance}.`, 'success');
+                }
+            }
+            function addMessage(msg, type) {
+                const elem = document.createElement('p');
+                elem.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                elem.classList.add(type);
+                document.getElementById('info').prepend(elem);
+            }
+        </script>
+        <style>
+            body {
+                height: 100vh;
+                margin: 0;
+            }
+            body div#wrapper {
+                padding: 16px;
+            }
+            body div h1 {
+                margin-top: 0;
+            }
+            #info {
+                overflow-y: scroll;
+                height: 400px;
+            }
+            .info {
+                color: blue;
+            }
+            .success {
+                color: green;
+                font-weight: bold;
+            }
+            .fail {
+                color: red;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="wrapper">
+            <h1>Squat Jump Practice</h1>
+            <h2>Info</h2>
+            <p>
+                Space between jumps should be 1 frame (around 16-17ms). Second jump must be under 250ms or the player will stop crouching.<br>
+                Depending on when exactly in a frame you pressed and released the keys, the same inputs may or may not succeed in a squat jump
+                (at least, this is my understanding). Your approximate chance of actually succeeding will be displayed next to a success.<br>
+                The sets of 3 numbers include how long you held jump the first time, the time between releasing the first one and pressing
+                the second one, and how long you held the second jump for (so the middle number should be close to 16-17 and the last
+                should be less than 250).<br>
+                After setting your keys, you should be able to just mimic the keystrokes of doing a squat jump anywhere on the page and see your results.<br>
+                Note: setting both keys to the same key DOES work and should function identically to ingame!<br>
+                Mouse buttons should work fine, but typically the side buttons will trigger "browser back" so you may need to use 3rd-party software to use them here.
+            </p>
+            <h2>Practice</h2>
+            <p>Keys: [<span id="text1">KeyG</span>], [<span id="text2">Space</span>]</p>
+            <button id="button1">Set first jump key...</button>
+            <button id="button2">Set second jump key...</button>
+            <div id="info"></div>
+        </div>
+    </body>
+</html>

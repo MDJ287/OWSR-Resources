@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>OW orbit drift simulator</title>
+<meta charset=utf-8>
+<style>
+	.slidecontainer {
+	  width: 100%;
+	}
+
+	.slider {
+	  appearance: none;
+	  width: 100%;
+	  height: 25px;
+	  background: none;
+	  border: 1px solid #ddd;
+	  opacity: 0.7;
+	  -webkit-transition: .2s;
+	  transition: opacity .2s;
+	  margin-bottom: 10px;
+	  outline: none;
+	}
+
+	.slider:hover {
+	  opacity: 1;
+	}
+
+	.slider::-webkit-slider-thumb {
+	  -webkit-appearance: none;
+	  appearance: none;
+	  width: 30px;
+	  height: 30px;
+	  background: transparent;
+	  cursor: pointer;
+	  border-radius: 20px;
+	  border: 5px solid #f72;
+	  background: #f72;
+	  box-shadow: -5px 5px 0px 2px #000 inset;
+	  box-sizing: content-box;
+	}
+
+	.slider::-moz-range-thumb {
+	  width: 30px;
+	  height: 30px;
+	  background: transparent;
+	  cursor: pointer;
+	  border-radius: 20px;
+	  border: 5px solid #f72;
+	  background: #f72;
+	  box-shadow: -5px 5px 0px 2px #000 inset;
+	}
+	body {
+	  margin: 8px;
+	  overflow: hidden;
+	  background: #444;
+	}
+	canvas {
+		position: fixed;
+		left: 8px;
+		top: 80px;
+	}
+</style>
+<script>
+	let drawTowerTwin = function(ctx, time, color) {
+		let oldStrokeStyle = ctx.strokeStyle;
+		let oldLineWidth = ctx.lineWidth;
+		ctx.strokeStyle = "rgb(" + color + ")";
+		ctx.lineWidth = this.radius*1/2;
+
+		ctx.beginPath();
+		ctx.arc(this.x, this.z, this.radius*3/4, 0, 2 * Math.PI, false);
+		ctx.stroke();
+
+		ctx.strokeStyle = oldStrokeStyle;
+		ctx.lineWidth = oldLineWidth;
+	};
+
+	// "period:1" without a radius ensures that orbits are drawn of objects that we don't have orbital parameters of yet
+	let objects = []
+	let totalSecs = 0;
+	let xBuf, zBuf, vxBuf, vzBuf;
+	let objectIndexByName;
+	const sun_G = 4e8;
+	
+	let oldPlanet = null, oldStartAt = null, oldTotal = null;
+	
+	function updateButton() {
+		let outdated = 
+			oldPlanet !== document.getElementById("planet").value ||
+			oldStartAt !== document.getElementById("startAt").value ||
+			oldTotal !== document.getElementById("total").value;
+		
+		document.getElementById("recompute").style.outline = outdated ? "2px solid red" : "";
+	}
+
+	function recompute() {
+		objects = [
+			{name: "sun",					x:0, z:0,							radius:2000							},
+			//{name: "ss",	parent:"sun",	distance:2300,						period:34.5							},
+			{name: "hgt",	parent:"sun",	x:-2867.882, z:4095.762,												},
+			{name: "ct",	parent:"hgt",	x:0,z:250,	initialspeed:-28.28427,	radius:150,		angularspeed: 0.05	},
+			{name: "tt",	parent:"hgt",	x:0,z:-250,	initialspeed:-28.28427,	radius:150,		angularspeed: 0.07, render: drawTowerTwin},
+			{name: "th",	parent:"sun",	x:1492.172, z:-8462.538,			radius:250,		angularspeed: -0.01	},
+			//{name: "ar",	parent:"th",	distance:900,   period:1			/*radius:75*/						},
+			//{name: "sat",	parent:"th",	distance:340															},
+			{name: "bh",	parent:"sun",	x:11513.28, z:-2030.102,			radius:300,		angularspeed: 0.02	},
+			//{name: "hl",	parent:"bh",	distance:1000,	period:1			/*radius:100*/						},
+			{name: "gd",	parent:"sun",	x:3421.723, z:-16097.95,			radius:950,		angularspeed: 0		},
+			//{name: "opc",	parent:"gd",	distance:1200,	period:1												},
+			{name: "db",	parent:"sun",	x:-3472.959, z:19696.16,			radius:600,		angularspeed: 0		},
+			//{name: "whs",	parent:"sun",	distance:23540															},
+			{name: "wh",	parent:"sun",	x:-23000,z:0, initialspeed: 0, 		radius:40							},
+			{name: "il",	parent:"sun",	x:-24100,z:0, initialspeed:-0.425,	radius:125,	lifetime: 60*20			}
+		];
+		
+		objectIndexByName = new Map(objects.map((obj, idx) => [obj.name, idx]));
+
+		if (objectIndexByName.size != objects.length) {
+			throw new Error("Duplicate object name(s) " + objects.filter((obj,idx) => objectIndexByName.get(obj.name) != idx).map(obj => obj.name).join(", "));
+		}
+
+		let affected = objects.findIndex(object => object.name === document.getElementById("planet").value);
+		let timeToSeconds = val => val.match(/^(\d+):(\d+):(\d+)$/) ? RegExp.$1*3600+RegExp.$2*60+ +RegExp.$3 : undefined;
+		
+		let affectedFrom = timeToSeconds(document.getElementById("startAt").value);
+		totalSecs = timeToSeconds(document.getElementById("total").value);
+
+		let fps = 60;
+		let totalFrames = totalSecs*fps;
+		let frame = 1/fps;
+
+		
+		document.getElementById("slider").max = totalSecs;
+		xBuf = objects.map(o => new Float32Array(totalSecs+1));
+		zBuf = objects.map(o => new Float32Array(totalSecs+1));
+		vxBuf = objects.map(o => new Float32Array(totalSecs+1));
+		vzBuf = objects.map(o => new Float32Array(totalSecs+1));
+
+		for (let i = 0; i < objects.length; i++) {
+			let object = objects[i];
+			object.z = -object.z; // TODO why?
+			if (object.parent) {
+				let parent = objects[objectIndexByName.get(object.parent)];
+				if (!parent) {
+					throw new Error(object.parent + " not found");
+				}
+				object.parent = parent;
+				let distance = Math.sqrt(object.x ** 2 + object.z ** 2);
+				let angle = Math.atan2(object.z, object.x);
+				if (parent.angle) angle += parent.angle;
+				object.angle = angle;
+				let velocity = Math.sqrt(sun_G/distance) * (object.initialspeed ?? 1);
+				console.log(object.name, velocity);
+				//object.x = distance * Math.cos(angle);
+				//object.z = distance * Math.sin(angle);
+				object.vx = velocity * Math.sin(angle);
+				object.vz = velocity * -Math.cos(angle);
+			} else {
+				object.vx = 0;
+				object.vz = 0;
+			}
+			object.ax = 0;
+			object.az = 0;
+			xBuf[i][0] = object.x;
+			zBuf[i][0] = object.z;
+			vxBuf[i][0] = object.vx;
+			vzBuf[i][0] = object.vz;
+		}
+		
+		for (let t = 1; t <= totalFrames; t++) {
+			for (let i = 0; i < objects.length; i++) {
+				let object = objects[i];
+				let parent = object.parent;
+				if (parent) {
+					// apply forces
+					let dx = object.x - parent.x;
+					let dz = object.z - parent.z;
+					let d = Math.sqrt(dx*dx + dz*dz);
+					let f = sun_G/(d*d*d);
+					if (i !== affected || t < affectedFrom*fps) {
+						object.ax = -dx*f;
+						object.az = -dz*f;
+					}
+					object.vx += object.ax*frame;
+					object.vz += object.az*frame;
+					object.x += object.vx*frame;
+					object.z += object.vz*frame;
+					object.ax = -dx*f;
+					object.az = -dz*f;
+					if (t % fps === 0) {
+						xBuf[i][t/fps] = object.x;
+						zBuf[i][t/fps] = object.z;
+						vxBuf[i][t/fps] = object.vx;
+						vzBuf[i][t/fps] = object.vz;
+					}
+				}
+			}
+		}
+		
+		oldPlanet = document.getElementById("planet").value;
+		oldStartAt = document.getElementById("startAt").value;
+		oldTotal = document.getElementById("total").value;
+		updateButton();
+		
+		render();
+	}
+	
+	function simulate(time) {
+		let t = Math.max(0, Math.min(totalSecs+1, Math.round(time)));
+		let result = objects.map(obj => Object.assign({}, obj));
+		for (let i = 0; i < objects.length; i++) {
+			result[i].x = xBuf[i][t];
+			result[i].z = zBuf[i][t];
+			result[i].vx = vxBuf[i][t];
+			result[i].vz = vzBuf[i][t];
+		}
+		return result;
+	}
+
+	// We simulate and render the solar system twice wrt TH's current angle.
+	// But which point to fix?
+	// Method 1: fix pre-warp sun
+	// Method 2: fix pre-warp TH
+	// Method 3: fix post-warp TH
+	// Method 4: fix post-warp sun
+
+	function render() {
+		let time = +document.getElementById("slider").value;
+		let f = (a,b,c) => (a-a%b)/b%c;
+		document.getElementById("time").value = [(time-time%36000)/36000,f(time,3600,10),":",f(time,600,6),f(time,60,10),":",f(time,10,6),time%10].join("");
+		
+		let canvas = document.getElementById("canvas");
+		let width = Math.floor(window.innerWidth - 16);
+		let height = Math.floor(window.innerHeight - 88);
+		canvas.width = width;
+		canvas.height = height;
+		let ctx = canvas.getContext("2d");
+		
+		ctx.fillStyle = "black";
+		ctx.fillRect(0,0,width,height);
+		
+		let scale = Math.min(width, height)/44000;
+
+		ctx.setTransform(1,0,0,1,0,0);
+		ctx.translate(width/2, height/2);
+		ctx.scale(scale, scale);
+		ctx.lineWidth = 1/scale;
+
+		let objects = simulate(time);
+		let objects0 = simulate(0);
+
+		let th = objects[objectIndexByName.get("th")];
+		let th0 = objects0[objectIndexByName.get("th")];
+
+
+		let white = "255,255,255";
+		let red = "255,0,0";
+
+		uncenter(ctx, th);
+		renderSystem(ctx, objects, time, white);
+	}
+	
+	function center(ctx, baseObj) {
+		ctx.rotate(baseObj.rotangle);
+		ctx.translate(-baseObj.x, -baseObj.z);
+	}
+
+	function uncenter(ctx, baseObj) {
+		ctx.translate(baseObj.x, baseObj.z);
+		ctx.rotate(-baseObj.rotangle);
+	}
+	
+	function renderSystem(ctx, objects, time, color) {
+		ctx.fillStyle = "rgb(" + color + ")";
+		ctx.strokeStyle = "rgba(" + color + ",0.3)";
+
+		let baseObj = objects[objectIndexByName.get("th")];
+		center(ctx, baseObj);
+	
+		for (let obj of objects) {
+			if (obj.radius) {
+				if (!obj.lifetime || time < obj.lifetime) {
+					if (obj.render) {
+						obj.render(ctx, time, color);
+					} else {
+						ctx.beginPath();
+						ctx.arc(obj.x, obj.z, obj.radius, 0, 2 * Math.PI, false);
+						ctx.fill();
+					}
+				}
+			}
+			if (obj.parent) {
+				let parent = obj.parent;
+				let x = obj.x - parent.x;
+				let z = obj.z - parent.z;
+				let vx = obj.vx - parent.vx;
+				let vz = obj.vz - parent.vz;
+				let angmom = x*vz - z*vx;
+				let energy = (vx*vx + vz*vz)*.5 - sun_G/Math.sqrt(x*x+z*z);
+				
+				// elliptic orbits only please
+				if (energy >= 0) continue;
+				
+				// do our variables make sense at all?
+				let dis = sun_G * sun_G + 2 * angmom * angmom * energy;
+				if (dis < 0) continue;
+				dis = Math.sqrt(dis);
+				
+				// Maximum and minimum points
+				let rMax = (-sun_G - dis)/(2*energy);
+				let rMin = (-sun_G + dis)/(2*energy);
+				
+				// major and minor axes
+				let maj = (rMax + rMin)*.5;
+				let min = Math.sqrt(rMax * rMin);
+				let ofs = (rMax - rMin)*.5;
+				
+				// current velocity
+				let vang = x*vz - z*vx;
+				let vrad = x*vx + z*vz;
+				let v = vrad/vang;
+				let r = Math.sqrt(x*x + z*z);
+				
+				let sin = -v/r*min*min/ofs;
+				let cos = (maj - min*min/r)/ofs;
+				
+				let w = Math.atan2(z, x) - Math.atan2(sin, cos);
+				
+				ctx.beginPath();
+				ctx.ellipse(parent.x + ofs*Math.cos(w), parent.z + ofs*Math.sin(w), maj, min, w, 0, 2 * Math.PI, false);
+				ctx.stroke();
+			}
+		}
+
+		uncenter(ctx, baseObj);
+	}
+	
+	function showInfo() {
+		alert("Simple orbit drift simulator by Kabuto. Probably full of bugs, just like the game ;-)");
+	}
+	
+	window.addEventListener("resize", render);
+</script>
+</head>
+<body onload="recompute()">
+	<div class="slidecontainer">
+		<input type="range" min="0" max="1320" value="0" class="slider" id="slider" onchange="render()" oninput="render()">
+	</div>
+	<div class="controls" style="display:flex;">
+		<div style="flex-grow:1;" onkeypress="if(event.keyCode===13)recompute()">
+			Planet:
+			<select id="planet" onchange="updateButton()">
+				<option value=hgt>hgt</option>
+				<option value=th selected>th</option>
+				<option value=bh>bh</option>
+				<option value=gd>gd</option>
+				<option value=db>db</option>
+			</select>
+			Start drifting at
+			<input type="time" id="startAt" value="00:04:30" onchange="updateButton()" oninput="updateButton()">
+			Total duration
+			<input type="time" id="total" value="04:00:00" onchange="updateButton()" oninput="updateButton()">
+			<input type="button" id="recompute" value="recompute!" onclick="recompute()">
+		</div>
+		<div style="flex-grow:0;">
+			<input id="time" type="time" disabled="disabled" value="00:00:00" style="background:white;"/>
+			<input onclick="showInfo()" type="button" value="about / info">
+		</div>
+	</div>
+	<canvas id="canvas"></canvas>
+</body>
+</html>

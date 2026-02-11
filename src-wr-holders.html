@@ -1,0 +1,197 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Outer Wilds Speedrun WRs</title>
+        <script>
+            let platform = 'pc';
+            let subcategories = [];
+            let requests = 0;
+            let errors = 0;
+            
+            async function getJson(url) {
+                const response = await fetch(url/*, {'cache': 'no-cache'}*/);
+                if (response.ok) {
+                    requests++;
+                    document.getElementById('loading').innerHTML = `loading... ${requests} http requests complete (out of less than 250)`;
+                    return await response.json();
+                }
+                else if (response.status === 420) {
+                    errors++;
+                    document.getElementById('errors').innerHTML = `there were ${errors} http 420 errors so far`;
+                    return await getJson(url);
+                }
+                else {
+                    alert(`http response ${response.status} idk what this means probably just reload the page`);
+                }
+            }
+
+            // main process
+            
+            (async function() {
+                const baseCategories = (await getJson('https://www.speedrun.com/api/v1/games/j1n5e91p/categories')).data;
+                const categoryExtensions = (await getJson('https://www.speedrun.com/api/v1/games/4d7np7l6/categories')).data;
+                baseCategories.forEach(x => x.isCategoryExtension = false);
+                categoryExtensions.forEach(x => x.isCategoryExtension = true);
+                const allCategories = baseCategories.concat(categoryExtensions);
+
+                for (let i=0; i<allCategories.length; i++) {
+                    const category = allCategories[i];
+                    const variables = (await getJson(category.links.find(x => x.rel === 'variables').uri)).data.filter(x => x['is-subcategory']);
+
+                    await addSubcategories(category, variables, {}, {}, 0);
+                }
+
+                setTable();
+
+                document.getElementById('loading').remove();
+                document.getElementById('errors').remove();
+                         
+            })();
+
+            function setTable() {
+                // filter for platform
+                platformSubcategories = subcategories.filter(x => x.variableNames[Object.keys(x.variableNames).filter(y => y.substring(0,8) === 'Platform')[0]].toLowerCase() === platform.toLowerCase());
+
+                // html stuff
+                const mainDiv = document.getElementById('main');
+                mainDiv.innerHTML = '';
+                
+                // set table
+
+                const table = document.createElement('table');
+                table.innerHTML = '';
+
+                const headingTr = document.createElement('tr');
+                ['category','wr holder','time','link'].forEach(x => {
+                    const th = document.createElement('th');
+                    th.innerHTML = x;
+                    headingTr.append(th);
+                });
+                table.append(headingTr);
+
+                for (let i=0; i<platformSubcategories.length; i++) {
+                    const subcategory = platformSubcategories[i];
+                    const tr = document.createElement('tr');
+                    const cells = [];
+                    const numCells = 4;
+
+                    for (let i=0; i<numCells; i++) {
+                        cells[i] = document.createElement('td');
+                    }
+                    
+                    let nameText = subcategory.name;
+                    nameText += ' ('
+                    const variableKeys = Object.keys(subcategory.variableNames);
+                    for (let j=0; j<variableKeys.length; j++) {
+                        nameText += subcategory.variableNames[variableKeys[j]] + (j === variableKeys.length-1 ? ')' : ', ');
+                    }
+                    cells[0].classList.add(subcategory.isCategoryExtension ? 'category-extension' : 'base-category');
+                    cells[0].innerHTML = nameText;
+
+                    cells[1].innerHTML = subcategory.wrHolder;
+                    cells[2].innerHTML = formatTime(subcategory.wrTime);
+                    cells[3].innerHTML = subcategory.wrHolder === '(empty)' ? '-' : `<a href="${subcategory.wrLink}">${subcategory.wrLink}</a>`;
+
+                    for (let i=0; i<numCells; i++) {
+                        tr.append(cells[i]);
+                    }
+                    
+                    table.append(tr);
+                }
+                
+                const button = document.createElement('button');
+                button.innerHTML = 'switch platform';
+                button.onclick = switchPlatform;
+                
+                mainDiv.append(button);
+                mainDiv.append(table);
+            }
+
+            // recursive method for counting all subcategories of all categories
+            
+            async function addSubcategories(category, variables, variableIds, variableNames, index) {
+                const variable = variables[index];
+                const values = variable.values.values;
+                const valueKeys = Object.keys(values);
+
+                const tempVariableIds = Object.assign({},variableIds);
+                const tempVariableNames = Object.assign({},variableNames);
+                
+                for (let i=0; i<valueKeys.length; i++) {
+                    tempVariableIds[variable.id] = valueKeys[i];
+                    tempVariableNames[variable.name] = values[valueKeys[i]].label;
+                    
+                    if (index >= variables.length - 1) {
+                        let linkVars = '';
+                        const variableIdKeys = Object.keys(tempVariableIds);
+                        for (let j=0; j<variableIdKeys.length; j++) {
+                            linkVars += `&var-${variableIdKeys[j]}=${tempVariableIds[variableIdKeys[j]]}`;
+                        }
+                        const leaderboardLink = `${category.links.find(x => x.rel === 'leaderboard').uri}?top=1${linkVars}`;
+                        const wrRun = (await getJson(leaderboardLink)).data.runs[0]?.run;
+                        const isEmpty = wrRun === undefined;
+                        const wrHolderName = isEmpty ? '(empty)' : (await getJson(wrRun.players[0].uri)).data.names.international;
+                        subcategories.push({
+                            name: category.name,
+                            id: category.id,
+                            variableIds: Object.assign({},tempVariableIds),
+                            variableNames: Object.assign({},tempVariableNames),
+                            isCategoryExtension: category.isCategoryExtension,
+                            wrHolder: wrHolderName,
+                            wrTime: isEmpty ? '-' : wrRun.times.primary_t,
+                            wrLink: isEmpty ? '-' : wrRun.weblink
+                        });
+                    }
+                    else await addSubcategories(category, variables, tempVariableIds, tempVariableNames, index + 1);
+                }
+                
+            }
+
+            function switchPlatform() {
+                platform = platform === 'pc' ? 'console' : 'pc';
+                setTable();
+            }
+
+            function formatTime(seconds) {
+                if (typeof seconds === 'string') return seconds;
+                let hr = Math.floor(seconds/3600);
+                seconds -= 3600*hr;
+                let min = Math.floor(seconds/60);
+                seconds -= 60*min;
+                min = `${min}`.padStart(2,'0');
+                if (seconds % 1 !== 0) seconds = seconds.toFixed(3).padStart(6,'0');
+                else seconds = `${seconds}`.padStart(2,'0');
+                if (hr) return `${hr}:${min}:${seconds}`;
+                return `${min}:${seconds}`;
+            }
+            
+        </script>
+        <style>
+            table {
+                border-collapse: collapse;
+            }
+            th, td {
+                border: 1px solid black;
+                padding: 4px;
+            }
+            th {
+                background-color: #b0b0b0;
+            }
+            .category-extension {
+                background-color: #80ffb0;
+            }
+            .base-category {
+                background-color: #ffb080;
+            }
+            button {
+                margin: 8px;
+                padding: 8px 16px 8px 16px;
+            }
+        </style>
+    </head>
+    <body>
+        <p id="loading">(if this text stays here for long enough to read, check your internet)</p>
+        <p id="errors"></p>
+        <div id="main"></div>
+    </body>
+</html>
