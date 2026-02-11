@@ -9,6 +9,7 @@
             let errors = 0;
             
             async function getJson(url) {
+                url = url.replace('http://','https://');
                 const response = await fetch(url/*, {'cache': 'no-cache'}*/);
                 if (response.ok) {
                     requests++;
