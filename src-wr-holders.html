@@ -87,14 +87,21 @@
                         nameText += subcategory.variableNames[variableKeys[j]] + (j === variableKeys.length-1 ? ')' : ', ');
                     }
                     cells[0].classList.add(subcategory.isCategoryExtension ? 'category-extension' : 'base-category');
-                    cells[0].innerHTML = nameText;
+                    cells[0].innerHTML = `<p class="category>${nameText}</p>`;
 
                     cells[1].innerHTML = '';
                     cells[3].innerHTML = '';
                     for (let i=0; i<subcategory.wrHolders.length; i++) {
                         const wrHolder = subcategory.wrHolders[i];
                         const wrRun = subcategory.wrRuns[i].run;
-                        cells[1].innerHTML += `<a href="${wrHolder.data.weblink}">${wrHolder.data.names.international}</a>`;
+                        const nameStyle = wrHolder.data['name-style'];
+                        if (nameStyle.style === 'gradient') {
+                            cells[1].innerHTML += `<a class="username" style="background-image: linear-gradient(0.25turn,${nameStyle['color-from'].light},${nameStyle['color-to'].light});" href="${wrHolder.data.weblink}">${wrHolder.data.names.international}</a>`;
+                        }
+                        else {
+                            console.log(`NON GRADIENT NAME STYLE: ${nameStyle.style}`);
+                            cells[1].innerHTML += `<a class="username" style="background: #000" href="${wrHolder.data.weblink}">${wrHolder.data.names.international}</a>`;
+                        }
                         if (i < subcategory.wrHolders.length-1) cells[1].innerHTML += ', ';
                         
                         cells[3].innerHTML += `<a href="${wrRun.weblink}">${wrRun.weblink}</a>`;
@@ -184,8 +191,18 @@
             
         </script>
         <style>
+            @font-face {
+                font-family: speedruncomfont;
+                src: url(speedrun-com-font.woff2) format("woff2");
+            }
+            body {
+                font-family: speedruncomfont;
+            }
             table {
                 border-collapse: collapse;
+            }
+            a {
+                text-decoration: none;
             }
             th, td {
                 border: 1px solid black;
@@ -203,6 +220,14 @@
             button {
                 margin: 8px;
                 padding: 8px 16px 8px 16px;
+            }
+            .username {
+                font-weight: 700;
+                color: transparent;
+                background-clip: text;
+            }
+            .category {
+                font-weight: 600;
             }
         </style>
     </head>
