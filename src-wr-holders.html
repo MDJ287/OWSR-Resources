@@ -89,9 +89,22 @@
                     cells[0].classList.add(subcategory.isCategoryExtension ? 'category-extension' : 'base-category');
                     cells[0].innerHTML = nameText;
 
-                    cells[1].innerHTML = subcategory.wrHolder;
-                    cells[2].innerHTML = formatTime(subcategory.wrTime);
-                    cells[3].innerHTML = subcategory.wrHolder === '(empty)' ? '-' : `<a href="${subcategory.wrLink}">${subcategory.wrLink}</a>`;
+                    cells[1].innerHTML = '';
+                    cells[3].innerHTML = '';
+                    for (let i=0; i<subcategory.wrHolders.length; i++) {
+                        const wrHolder = subcategory.wrHolders[i];
+                        const wrRun = subcategory.wrRuns[i].run;
+                        cells[1].innerHTML += `<a href="${wrHolder.data.weblink}">${wrHolder.data.names.international}</a>`;
+                        if (i < subcategory.wrHolders.length-1) cells[1].innerHTML += ', ';
+                        
+                        cells[3].innerHTML += `<a href="${wrRun.weblink}">${wrRun.weblink}</a>`;
+                        if (i < subcategory.wrHolders.length-1) cells[3].innerHTML += ', ';
+                    }
+                    if (cells[1].innerHTML === '') {
+                        cells[1].innerHTML = '(empty)';
+                        cells[3].innerHTML = '-';
+                    }
+                    cells[2].innerHTML = formatTime(subcategory.wrRuns[0]?.run?.times?.primary_t ?? '-');
 
                     for (let i=0; i<numCells; i++) {
                         tr.append(cells[i]);
@@ -129,18 +142,21 @@
                             linkVars += `&var-${variableIdKeys[j]}=${tempVariableIds[variableIdKeys[j]]}`;
                         }
                         const leaderboardLink = `${category.links.find(x => x.rel === 'leaderboard').uri}?top=1${linkVars}`;
-                        const wrRun = (await getJson(leaderboardLink)).data.runs[0]?.run;
-                        const isEmpty = wrRun === undefined;
-                        const wrHolderName = isEmpty ? '(empty)' : (await getJson(wrRun.players[0].uri)).data.names.international;
+                        const wrRuns = (await getJson(leaderboardLink)).data.runs;
+                        const isEmpty = wrRuns.length === 0;
+                        const wrHolderObjs = [];
+                        for (let i=0; i<wrRuns.length; i++) {
+                            const playerData = await getJson(wrRuns[i].run.players[0].uri);
+                            wrHolderObjs.push(playerData);
+                        }
                         subcategories.push({
                             name: category.name,
                             id: category.id,
                             variableIds: Object.assign({},tempVariableIds),
                             variableNames: Object.assign({},tempVariableNames),
                             isCategoryExtension: category.isCategoryExtension,
-                            wrHolder: wrHolderName,
-                            wrTime: isEmpty ? '-' : wrRun.times.primary_t,
-                            wrLink: isEmpty ? '-' : wrRun.weblink
+                            wrHolders: wrHolderObjs,
+                            wrRuns: wrRuns
                         });
                     }
                     else await addSubcategories(category, variables, tempVariableIds, tempVariableNames, index + 1);
