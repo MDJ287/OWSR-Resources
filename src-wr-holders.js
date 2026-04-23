@@ -90,8 +90,8 @@ function addSubcategories(finalIndex, category, variables, variableIds, variable
                                 if (wrHolderObjs.length === runs.length) {
                                     wrHolderObjs.sort(
                                         (a,b) =>
-                                            runs.indexOf(run => run.run.players[0].id === a.data.id) -
-                                            runs.indexOf(run => run.run.players[0].id === b.data.id)
+                                            runs.findIndex(run => run.run.players[0].id === a.data.id) -
+                                            runs.findIndex(run => run.run.players[0].id === b.data.id)
                                         );
                                     pushSubcategory(category, finalIndex, thisIterationVariableSortingIndices, thisIterationVariableIds, thisIterationVariableNames, wrHolderObjs, runs, varCount);
                                 }
