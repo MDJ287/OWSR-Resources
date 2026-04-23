@@ -139,7 +139,7 @@ function setTable() {
     });
 
     // html stuff
-    document.getElementById('info').remove();
+    document.getElementById('info')?.remove();
 
     const mainDiv = document.getElementById('main');
     mainDiv.innerHTML = '';
