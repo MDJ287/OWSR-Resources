@@ -6,7 +6,7 @@ let totalCategories = 0;
 
 async function getJson(url) {
     url = url.replace('http://','https://');
-    return fetch(url, {'cache': 'no-cache'}).then(res => res.json());
+    return fetch(url).then(res => res.json());
 }
 
 // main process
