@@ -179,25 +179,50 @@ function setTable() {
             nameText += subcategory.variableNames[variableKeys[j]] + (j === variableKeys.length-1 ? ')' : ', ');
         }
         cells[0].classList.add(subcategory.isCategoryExtension ? 'category-extension' : 'base-category');
-        cells[0].innerHTML = `<span class="category">${nameText}</span>`;
+        const categoryNameElem = document.createElement('span');
+        categoryNameElem.classList.add('category');
+        categoryNameElem.innerText = nameText;
+        cells[0].appendChild(categoryNameElem);
 
-        cells[1].innerHTML = '';
-        cells[3].innerHTML = '';
+        cells[1].innerText = '';
+        cells[3].innerText = '';
         for (let i=0; i<subcategory.wrHolders.length; i++) {
             const wrHolder = subcategory.wrHolders[i];
             const wrRun = subcategory.wrRuns[i].run;
-            const nameStyle = wrHolder.data['name-style'];
-            if (nameStyle.style === 'gradient') {
-                cells[1].innerHTML += `<a class="username" style="background-image: linear-gradient(0.25turn,${nameStyle['color-from'].light},${nameStyle['color-to'].light});" href="${wrHolder.data.weblink}">${wrHolder.data.names.international}</a>`;
+            let nameElem;
+            if (wrHolder !== null) {
+                const nameStyle = wrHolder.data['name-style'];
+                nameElem = document.createElement('a');
+                nameElem.classList.add('username');
+                nameElem.href = wrHolder.data.weblink;
+                nameElem.innerText = wrHolder.data.names.international;
+                switch (nameStyle?.style) {
+                case 'gradient':
+                    nameElem.style.backgroundImage = `linear-gradient(to right,${nameStyle['color-from'].light},${nameStyle['color-to'].light})`;
+                    break;
+                case 'solid':
+                    nameElem.style.backgroundColor = nameStyle.color.light;
+                    break;
+                default:
+                    console.log(`UNKNOWN NAME STYLE: ${nameStyle?.style}`, nameStyle);
+                    nameElem.style.backgroundColor = 'black';
+                    break;
+                }
             }
             else {
-                console.log(`NON GRADIENT NAME STYLE: ${nameStyle.style}`);
-                cells[1].innerHTML += `<a class="username" style="background: #000" href="${wrHolder.data.weblink}">${wrHolder.data.names.international}</a>`;
+                nameElem = document.createElement('span');
+                nameElem.classList.add('username');
+                nameElem.innerText = 'null';
+                cells[1]
             }
-            if (i < subcategory.wrHolders.length-1) cells[1].innerHTML += ', ';
+
+            cells[1].appendChild(nameElem);
+            if (i < subcategory.wrHolders.length-1) cells[1].appendChild(document.createTextNode(', '));
             
-            cells[3].innerHTML += `<a href="${wrRun.weblink}">${wrRun.weblink}</a>`;
-            if (i < subcategory.wrHolders.length-1) cells[3].innerHTML += ', ';
+            const linkElem = document.createElement('a');
+            linkElem.innerText = linkElem.href = wrRun.weblink;
+            cells[3].appendChild(linkElem);
+            if (i < subcategory.wrHolders.length-1) cells[3].appendChild(document.createTextNode(', '));
         }
         if (cells[1].innerHTML === '') {
             cells[1].innerHTML = '(empty)';
