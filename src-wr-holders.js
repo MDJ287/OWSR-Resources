@@ -147,17 +147,17 @@ function setTable() {
     document.getElementById('info')?.remove();
 
     const mainDiv = document.getElementById('main');
-    mainDiv.innerHTML = '';
+    mainDiv.innerText = '';
     
     // set table
 
     const table = document.createElement('table');
-    table.innerHTML = '';
+    table.innerText = '';
 
     const headingTr = document.createElement('tr');
     ['category','wr holder','time','link'].forEach(x => {
         const th = document.createElement('th');
-        th.innerHTML = x;
+        th.innerText = x;
         headingTr.append(th);
     });
     table.append(headingTr);
@@ -224,11 +224,11 @@ function setTable() {
             cells[3].appendChild(linkElem);
             if (i < subcategory.wrHolders.length-1) cells[3].appendChild(document.createTextNode(', '));
         }
-        if (cells[1].innerHTML === '') {
-            cells[1].innerHTML = '(empty)';
-            cells[3].innerHTML = '-';
+        if (cells[1].innerText === '') {
+            cells[1].innerText = '(empty)';
+            cells[3].innerText = '-';
         }
-        cells[2].innerHTML = formatTime(subcategory.wrRuns[0]?.run?.times?.primary_t ?? '-');
+        cells[2].innerText = formatTime(subcategory.wrRuns[0]?.run?.times?.primary_t ?? '-');
 
         for (let i=0; i<numCells; i++) {
             tr.append(cells[i]);
@@ -238,7 +238,7 @@ function setTable() {
     }
     
     const button = document.createElement('button');
-    button.innerHTML = 'switch platform';
+    button.innerText = 'switch platform';
     button.onclick = switchPlatform;
     
     mainDiv.append(button);
