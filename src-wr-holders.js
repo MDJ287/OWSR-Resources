@@ -130,7 +130,11 @@ function pushSubcategory(category, index, secondaryIndices, variableIds, variabl
 
 function setTable() {
     // filter for platform
-    platformSubcategories = subcategories.filter(x => x.variableNames[Object.keys(x.variableNames).filter(y => y.substring(0,8) === 'Platform')[0]].toLowerCase() === platform.toLowerCase());
+    platformSubcategories = subcategories.filter(category =>
+        category.variableNames[Object.keys(category.variableNames).filter(varnames =>
+            varnames.substring(0,8) === 'Platform'
+        )[0]].toLowerCase() === platform.toLowerCase()
+    );
 
     platformSubcategories.sort((a, b) => {
         if (a.isCategoryExtension !== b.isCategoryExtension) return a.isCategoryExtension ? 1 : -1;
@@ -149,8 +153,19 @@ function setTable() {
     const mainDiv = document.getElementById('main');
     mainDiv.innerText = '';
     
-    // set table
+    mainDiv.appendChild(createPlatformButton());
+    mainDiv.appendChild(createTable(platformSubcategories));
+    mainDiv.appendChild(createWrHolderList(platformSubcategories));
+}
 
+function createPlatformButton() {
+    const button = document.createElement('button');
+    button.innerText = 'switch platform';
+    button.onclick = switchPlatform;
+    return button;
+}
+
+function createTable(platformSubcategories) {
     const table = document.createElement('table');
     table.innerText = '';
 
@@ -189,32 +204,7 @@ function setTable() {
         for (let i=0; i<subcategory.wrHolders.length; i++) {
             const wrHolder = subcategory.wrHolders[i];
             const wrRun = subcategory.wrRuns[i].run;
-            let nameElem;
-            if (wrHolder !== null) {
-                const nameStyle = wrHolder.data['name-style'];
-                nameElem = document.createElement('a');
-                nameElem.classList.add('username');
-                nameElem.href = wrHolder.data.weblink;
-                nameElem.innerText = wrHolder.data.names.international;
-                switch (nameStyle?.style) {
-                case 'gradient':
-                    nameElem.style.backgroundImage = `linear-gradient(to right,${nameStyle['color-from'].light},${nameStyle['color-to'].light})`;
-                    break;
-                case 'solid':
-                    nameElem.style.backgroundColor = nameStyle.color.light;
-                    break;
-                default:
-                    console.log(`UNKNOWN NAME STYLE: ${nameStyle?.style}`, nameStyle);
-                    nameElem.style.backgroundColor = 'black';
-                    break;
-                }
-            }
-            else {
-                nameElem = document.createElement('span');
-                nameElem.classList.add('username');
-                nameElem.innerText = 'null';
-                cells[1]
-            }
+            let nameElem = createUsername(wrHolder);
 
             cells[1].appendChild(nameElem);
             if (i < subcategory.wrHolders.length-1) cells[1].appendChild(document.createTextNode(', '));
@@ -236,13 +226,67 @@ function setTable() {
         
         table.append(tr);
     }
-    
-    const button = document.createElement('button');
-    button.innerText = 'switch platform';
-    button.onclick = switchPlatform;
-    
-    mainDiv.append(button);
-    mainDiv.append(table);
+
+    return table;
+}
+
+function createWrHolderList(platformSubcategories) {
+    const wrCountsElem = document.createElement('ul');
+    const wrCounts = {};
+    const wrHolderObjs = {};
+    const wrHolderIds = [];
+    let totalWrs = 0;
+    platformSubcategories.forEach(subcategory => {
+        subcategory.wrHolders.forEach((wrHolder, i, wrHolders) => {
+            const id = wrHolder?.data?.id;
+            wrCounts[id] ??= 0;
+            wrCounts[id] += 1/wrHolders.length;
+            wrHolderObjs[id] = wrHolder;
+            if (!wrHolderIds.includes(id)) wrHolderIds.push(id);
+        });
+        if (subcategory.wrHolders.length !== 0) {
+            totalWrs++;
+        }
+    });
+    wrHolderIds.sort((a,b) => wrCounts[b] - wrCounts[a]);
+    wrHolderIds.forEach(id => {
+        const wrHolderElem = document.createElement('li');
+        const nameElem = createUsername(wrHolderObjs[id]);
+        const textNode = document.createTextNode(`: ${wrCounts[id]}/${totalWrs} records, ${100*wrCounts[id]/totalWrs}%`);
+        wrHolderElem.appendChild(nameElem);
+        wrHolderElem.appendChild(textNode);
+        wrCountsElem.appendChild(wrHolderElem);
+    });
+    return wrCountsElem;
+}
+
+function createUsername(runner) {
+    let nameElem;
+    if (runner !== null) {
+        const nameStyle = runner.data['name-style'];
+        nameElem = document.createElement('a');
+        nameElem.classList.add('username');
+        nameElem.href = runner.data.weblink;
+        nameElem.innerText = runner.data.names.international;
+        switch (nameStyle?.style) {
+        case 'gradient':
+            nameElem.style.backgroundImage = `linear-gradient(to right,${nameStyle['color-from'].light},${nameStyle['color-to'].light})`;
+            break;
+        case 'solid':
+            nameElem.style.backgroundColor = nameStyle.color.light;
+            break;
+        default:
+            console.log(`UNKNOWN NAME STYLE: ${nameStyle?.style}`, nameStyle);
+            nameElem.style.backgroundColor = 'black';
+            break;
+        }
+    }
+    else {
+        nameElem = document.createElement('span');
+        nameElem.classList.add('username');
+        nameElem.innerText = 'null';
+    }
+    return nameElem;
 }
 
 function switchPlatform() {
