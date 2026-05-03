@@ -37,6 +37,7 @@
             }
             function keyDown(event) {
                 if (isSettingKey !== -1) {
+                    event.preventDefault();
                     if (isSettingKey === 0) {
                         firstCode = event.keyCode;
                         document.getElementById('text1').innerText = event.code;
@@ -50,6 +51,7 @@
                     return;
                 }
                 if (event.keyCode === firstCode) {
+                    event.preventDefault();
                     if (firstCode !== secondCode || pressTime === -1) {
                         pressTime = Date.now();
                         hasReleased = false;
@@ -57,6 +59,7 @@
                     else rePressTime = Date.now();
                 }
                 else if (event.keyCode === secondCode) {
+                    event.preventDefault();
                     rePressTime = Date.now();
                 }
             }
