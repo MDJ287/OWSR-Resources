@@ -151,7 +151,7 @@ function setTable() {
     document.getElementById('info')?.remove();
 
     const mainDiv = document.getElementById('main');
-    mainDiv.innerText = '';
+    mainDiv.innerHTML = '';
     
     mainDiv.appendChild(createPlatformButton());
     mainDiv.appendChild(createTable(platformSubcategories));
@@ -167,7 +167,7 @@ function createPlatformButton() {
 
 function createTable(platformSubcategories) {
     const table = document.createElement('table');
-    table.innerText = '';
+    table.innerHTML = '';
 
     const headingTr = document.createElement('tr');
     ['category','wr holder','time','link'].forEach(x => {
@@ -198,9 +198,7 @@ function createTable(platformSubcategories) {
         categoryNameElem.classList.add('category');
         categoryNameElem.innerText = nameText;
         cells[0].appendChild(categoryNameElem);
-
-        cells[1].innerText = '';
-        cells[3].innerText = '';
+        
         for (let i=0; i<subcategory.wrHolders.length; i++) {
             const wrHolder = subcategory.wrHolders[i];
             const wrRun = subcategory.wrRuns[i].run;
